@@ -1,13 +1,18 @@
 from django.shortcuts import render
+from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from PIL import Image
 import io
 import torch
-from torchvision import transforms, models
+from torchvision import transforms
+from torchvision.models import resnet50, ResNet50_Weights
+import json
+import base64
 # Create your views here.
 
 #Loads the pre-trained model
-model = models.resnet50(pretrained=True)
+weights = ResNet50_Weights.IMAGENET1K_V2
+model = resnet50(weights=weights)
 model.eval()
 
 #Define the transformation
@@ -23,19 +28,25 @@ transform = transforms.Compose([
 def predict(request):
     if request.method == 'POST':
         #Load image from the request
-        image = Image.open(io.BytesIO(request.FILES['image'].read()))
+        data = json.loads(request.body)
+        image_data = data.get('image')
 
+        header, image_data = image_data.split(';base64,')
+        image_data = base64.b64decode(image_data)
+
+        #open the base64 data as an image
+        image = Image.open(io.BytesIO(image_data)).convert("RGB")
+        
         #Preprocess the image
-        image = transform(image).unsqueeze(0)
+        img_tensor = transform(image).unsqueeze(0)
 
         #Make the prediction
         with torch.no_grad():
-            outputs = model(image)
+            prediction = model(img_tensor).squeeze(0).softmax(0)
 
         #Get the predicted class
-        _, predicted = torch.max(outputs.data, 1)
+        class_id = prediction.argmax().item()
+        score = prediction[class_id].item()
+        predicted_label = weights.meta["categories"][class_id]
 
-        #Convert the predicted class index to the corresponding label
-        predicted_label = index_to_label(predicted.item())
-
-        return JsonResponse({ 'label': predicted_label })
+        return JsonResponse({ 'label': predicted_label, 'confidence': str(score) })

@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 
+import axios from 'axios';
+
 function DrawingCanvas() {
 
     const [drawing, setDrawing] = useState(false);
@@ -49,8 +51,20 @@ function DrawingCanvas() {
     contextRef.current.stroke();
   };
 
-  const predict = () => {
-    // TODO: Send the drawn image to the server for prediction
+  const predict = async () => {
+    //Send the drawn image to the server for prediction
+    const canvas = canvasRef.current;
+    const dataUrl = canvas.toDataURL();
+
+    try {
+        const response = await axios.post('http://localhost:8000/predict/', {
+            image: dataUrl
+        });
+
+        console.log(response.data);
+    } catch (error) {
+        console.error('Failed to predict image:', error.message);
+    }
   };
 
   const clear = () => {
